@@ -68,7 +68,7 @@ where:
      list - list the entries in the wallet (without passwords)`
 
 var verbose bool = true
-var mod_entry int 
+var mod_entry int = -1
 
 // You may want to create more global variables
 
@@ -90,7 +90,6 @@ func encrypt(key []byte, plaintext []byte, salt []byte) []byte{
 func decrypt(key []byte, ciphertext []byte, salt []byte) []byte{
   	// The key argument should be the AES key, either 16 or 32 bytes
   	// to select AES-128 or AES-256.
-   	fmt.Print(len(salt))
   	block, _ := aes.NewCipher(key)
 
   	gcm, _ := cipher.NewGCMWithNonceSize(block, 16)
@@ -374,21 +373,31 @@ func (my_wallet *wallet) processWalletCommand(command string) bool {
 
 	case "del":
 		if len(my_wallet.passwords) - 1 < mod_entry{
-			fmt.Print("Delete out of bounds, aborting")
+			fmt.Print("Delete out of bounds, aborting\n")
+		}
+		if mod_entry == -1{
+			fmt.Print("Missing argument, need number of entry to be deleted. Aborting \n")
 		}else{
-			fmt.Print("Are you sure you want to delete this entry? It will not be recoverable. (y/n)")
+			fmt.Print("Are you sure you want to delete this entry? It will not be recoverable. (y/n)\n")
 
 			readIn := bufio.NewReader(os.Stdin)
 			ans, _ := readIn.ReadString('\n')
 
 			if strings.ToLower(ans) == "y" || strings.ToLower(ans) == "yes"{
-				before_del := my_wallet.passwords[:mod_entry]
-				//after_del := my_wallet.passwords[(del_entry + 1):]
-				my_wallet.passwords = append(before_del, my_wallet.passwords[(mod_entry + 1):]...)
+				my_wallet.passwords = nil
 			}
-			if (verbose){
+				/*if mod_entry == 0{
+					my_wallet.passwords = my_wallet.passwords[1:]
+				}
+
+
+				if (verbose){
 				fmt.Print("-deleted entry\n")
-			}
+				}
+			}else{
+				fmt.Print("Deletion aborted \n")
+			}*/
+			
 		}
 		my_wallet.saveWallet()
 
@@ -405,8 +414,15 @@ func (my_wallet *wallet) processWalletCommand(command string) bool {
 		
 	case "list":
 		fmt.Print("Current entries: \n")
-		for _, entry := range my_wallet.passwords{
-			fmt.Print(entry)
+		for _, e := range my_wallet.passwords{
+			name := ""
+			i := 0
+			for i < len(e.entry){
+				fmt.Print(string(e.entry[i]))
+				i ++
+			}
+			fmt.Print(name)
+			fmt.Print("\n")
 		}
 		
 	default:
@@ -430,7 +446,6 @@ func (my_wallet *wallet) processWalletCommand(command string) bool {
 func main() {
 
 	//test
-	fmt.Print(time.Now())
 
 	// Setup options for the program content
 	getopt.SetUsage(walletUsage)
