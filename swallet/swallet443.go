@@ -257,7 +257,7 @@ func loadWallet(filename string) *wallet {
   		sp := strings.Split(e, "||")
   		var entry walletEntry
   		entry.entry = []byte(sp[0])
-  		entry.salt, _ = base64.StdEncoding.DecodeString(sp[2])
+  		entry.salt, _ = base64.StdEncoding.DecodeString(sp[1])
 
   		cipher, _ := base64.StdEncoding.DecodeString(sp[2])
   		entry.password = decrypt(hashpw[:16], cipher, entry.salt)
