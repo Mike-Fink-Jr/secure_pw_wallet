@@ -372,40 +372,83 @@ func (my_wallet *wallet) processWalletCommand(command string) bool {
 		my_wallet.saveWallet()
 
 	case "del":
-		if len(my_wallet.passwords) - 1 < mod_entry{
+
+		fmt.Print("Enter number of entry to delete \n")
+		readIn := bufio.NewReader(os.Stdin)
+		s, _ := readIn.ReadString('\n')
+		s = strings.TrimRight(s, "\n")
+		d, _ := strconv.Atoi(s) 
+
+
+		if len(my_wallet.passwords) - 1 < d{
 			fmt.Print("Delete out of bounds, aborting\n")
+			break
 		}
-		if mod_entry == -1{
-			fmt.Print("Missing argument, need number of entry to be deleted. Aborting \n")
-		}else{
-			fmt.Print("Are you sure you want to delete this entry? It will not be recoverable. (y/n)\n")
+		
+		fmt.Print("Are you sure you want to delete this entry? It will not be recoverable. (y/n)\n")
 
-			readIn := bufio.NewReader(os.Stdin)
-			ans, _ := readIn.ReadString('\n')
-
-			if strings.ToLower(ans) == "y" || strings.ToLower(ans) == "yes"{
-				my_wallet.passwords = nil
-			}
-				/*if mod_entry == 0{
-					my_wallet.passwords = my_wallet.passwords[1:]
-				}
-
-
-				if (verbose){
+		readIn2 := bufio.NewReader(os.Stdin)
+		ans, _ := readIn2.ReadString('\n')
+		if strings.Compare(strings.ToLower(ans), "y\n") ==  0 || strings.ToLower(ans) == "yes\n"{
+			my_wallet.passwords = append(my_wallet.passwords[:d], my_wallet.passwords[d+1:]...)
+			if (verbose){
 				fmt.Print("-deleted entry\n")
-				}
-			}else{
-				fmt.Print("Deletion aborted \n")
-			}*/
-			
+			}
+		}else{
+			fmt.Print("Deletion aborted \n")
 		}
+			
+		
 		my_wallet.saveWallet()
 
 	case "show":
+		fmt.Print("Enter number of entry to show\n")
+
+		readIn := bufio.NewReader(os.Stdin)
+		s, _ := readIn.ReadString('\n')
+		s = strings.TrimRight(s, "\n")
+		id, _ := strconv.Atoi(s)
+
+		if id >= len(my_wallet.passwords){
+			fmt.Print("Show out of boands, aborting\n")
+			break
+		}
+
+		fmt.Print("Password: ")
+		fmt.Print(string(my_wallet.passwords[id].password))
+		fmt.Print("\n")
+
+
 		
 		
 	case "chpw":
-		// DO SOMETHING HERE
+		fmt.Print("Enter number of entry to change\n")
+
+		readIn := bufio.NewReader(os.Stdin)
+		s, _ := readIn.ReadString('\n')
+		s = strings.TrimRight(s, "\n")
+		c, _ := strconv.Atoi(s)
+
+		if c >= len(my_wallet.passwords){
+			fmt.Print("Change out of boands, aborting\n")
+			break
+		}
+
+		new_pass := getPass(16)
+
+		copy(my_wallet.passwords[c].password, new_pass)
+
+		if (verbose){
+			fmt.Print("-Password changed\n")
+		}
+
+
+
+		my_wallet.saveWallet()
+
+
+
+
 		
 	case "reset":
 		fmt.Print("Enter new master password:\n")
@@ -482,13 +525,13 @@ func main() {
 	fmt.Printf("command [%t]\n", getopt.Arg(1))
 	command := strings.ToLower(getopt.Arg(1))
 
-	if getopt.NArgs() > 2{
+	/*if getopt.NArgs() > 2{
 		mod_entry, err = strconv.Atoi(getopt.Arg(2))
 		if err != nil{
 			fmt.Print("Improper arguments, to delete or change password, pass integer of entry to be modified as the third argument. Aborting \n")
 		}
 	}
-	
+	*/
 
 	// Now check if we are creating a wallet
 	if command == "create" {
@@ -503,8 +546,9 @@ func main() {
 
 		// Load the wallet, then process the command
 		my_wallet := loadWallet(filename)
-		my_wallet.processWalletCommand(command)
-
+		if my_wallet != nil{
+			my_wallet.processWalletCommand(command)
+		}
 
 	}
 
