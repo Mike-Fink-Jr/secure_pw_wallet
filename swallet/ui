@@ -3,34 +3,71 @@ package main
 import ( 
 	"fmt"
 	ui "github.com/gizak/termui"
+	"strings"
 )
 
-func promptOnePassword(label string) string {
+func chpwPrompt() (string, string, string) {
 	err := ui.Init()
 	if err != nil {
 		panic(err)
 	}
 	defer ui.Close()
 
+	var masterPassword = ""
 	var password = ""
+	var entryName = ""
+	var textboxActive = 0
 
+	//This is textbox 0
 	p := ui.NewPar("|")
 	p.Height = 3
 	p.Width = 50
 	p.X = 5
 	p.TextFgColor = ui.ColorWhite
-	p.BorderLabel = label
+	p.BorderLabel = "Wallet password"
 
-	ui.Render(p)
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "New Password"
+
+	//This is textbox 2
+	h := ui.NewPar("")
+	h.Height = 3
+	h.Width = 70
+	h.X = 5
+	h.Y = 10
+	h.TextFgColor = ui.ColorWhite
+	h.BorderLabel = "Entry name"
+
+	ui.Render(p, g, h)
 
 	//Handle when someone presses the enter key
 	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
-		ui.StopLoop()
-	})
+		if (textboxActive == 0) {
+			//Move on to the next textbox
 
-	//Handle when someone presses the tab key
-	ui.Handle("/sys/kbd/<tab>", func(e ui.Event) {
-		//Nothing should happen
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 1
+			g.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h)
+		} else if (textboxActive == 1) {
+			//Move on to the next textbox
+
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 2
+			h.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h)
+		} else if (textboxActive == 2) {
+			//User entry is complete
+			ui.StopLoop()
+		}
 	})
 
 	//Handle data entry into the textbox
@@ -38,20 +75,49 @@ func promptOnePassword(label string) string {
 
 		//Handle backspaces
 		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
-			if (len(password) > 0) {
-				password = password[:len(password) - 1]
+			if ((textboxActive == 0) && (len(masterPassword) > 0)) {
+				//We're removing from textbox 0
+
+				masterPassword = masterPassword[:len(masterPassword) - 1]
 				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
 				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(password) > 0)) {
+				//We're removing from textbox 1
+
+				password = password[:len(password) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 2) && (len(entryName) > 0)) {
+				//We're removing from textbox 2
+
+				entryName = entryName[:len(entryName) - 1]
+				h.Text = h.Text[:len(h.Text) - 2] //Remove the cursor and star from the end
+				h.Text = h.Text + "|" //Add the cursor back
 			}
 
 		//Handle writing into the textboxes
-		} else {
-			password = password + string(e.Data.(ui.EvtKbd).KeyStr)
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			masterPassword = masterPassword + string(e.Data.(ui.EvtKbd).KeyStr)
 			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
 			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			password = password + string(e.Data.(ui.EvtKbd).KeyStr)
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = g.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 2) {
+			//We're writing in textbox 2
+
+			entryName = entryName + string(e.Data.(ui.EvtKbd).KeyStr)
+			entryName = strings.Replace(entryName, "<space>", " ", -1)
+			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end
+			h.Text = entryName + "|" //Add the data and then the cursor back
 		}
 
-		ui.Render(p)
+		ui.Render(p, g, h)
 	})
 
 	ui.Handle("/sys/kbd/esc", func(ui.Event) {
@@ -71,18 +137,18 @@ func promptOnePassword(label string) string {
 
 	ui.Loop()
 
-	return password
+	return masterPassword, password, entryName
 }
 
-func promptTwoPasswords(label1 string, label2 string) (string, string) {
+func dsPrompt() (string, string) {
 	err := ui.Init()
 	if err != nil {
 		panic(err)
 	}
 	defer ui.Close()
 
-	var password1 = ""
-	var password2 = ""
+	var masterPassword = ""
+	var entryName = ""
 	var textboxActive = 0
 
 	//This is textbox 0
@@ -91,7 +157,7 @@ func promptTwoPasswords(label1 string, label2 string) (string, string) {
 	p.Width = 50
 	p.X = 5
 	p.TextFgColor = ui.ColorWhite
-	p.BorderLabel = label1
+	p.BorderLabel = "Wallet password"
 
 	//This is textbox 1
 	g := ui.NewPar("")
@@ -100,7 +166,7 @@ func promptTwoPasswords(label1 string, label2 string) (string, string) {
 	g.X = 5
 	g.Y = 4
 	g.TextFgColor = ui.ColorWhite
-	g.BorderLabel = label2
+	g.BorderLabel = "Entry name"
 
 	ui.Render(p, g)
 
@@ -120,23 +186,243 @@ func promptTwoPasswords(label1 string, label2 string) (string, string) {
 		}
 	})
 
-	//Handle when someone presses the tab key
-	ui.Handle("/sys/kbd/<tab>", func(e ui.Event) {
+	//Handle data entry into the textbox
+	ui.Handle("/sys/kbd", func(e ui.Event) {
+
+		//Handle backspaces
+		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
+			if ((textboxActive == 0) && (len(masterPassword) > 0)) {
+				//We're removing from textbox 0
+
+				masterPassword = masterPassword[:len(masterPassword) - 1]
+				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
+				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(entryName) > 0)) {
+				//We're removing from textbox 1
+
+				entryName = entryName[:len(entryName) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			}
+
+		//Handle writing into the textboxes
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			masterPassword = masterPassword + string(e.Data.(ui.EvtKbd).KeyStr)
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
+			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			entryName = entryName + string(e.Data.(ui.EvtKbd).KeyStr)
+			entryName = strings.Replace(entryName, "<space>", " ", -1)
+
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = entryName + "|" //Add star and then the cursor back
+		}
+
+		ui.Render(p, g)
+	})
+
+	ui.Handle("/sys/kbd/esc", func(ui.Event) {
+		//If ESC is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-c", func(ui.Event) {
+		//If CTRL-C is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-x", func(ui.Event) {
+		//If CTRL-X is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Loop()
+
+	return masterPassword, entryName
+}
+
+func addPrompt() (string, string, string) {
+	err := ui.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	var masterPassword = ""
+	var password = ""
+	var comment = ""
+	var textboxActive = 0
+
+	//This is textbox 0
+	p := ui.NewPar("|")
+	p.Height = 3
+	p.Width = 50
+	p.X = 5
+	p.TextFgColor = ui.ColorWhite
+	p.BorderLabel = "Wallet password"
+
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "Password"
+
+	//This is textbox 2
+	h := ui.NewPar("")
+	h.Height = 3
+	h.Width = 70
+	h.X = 5
+	h.Y = 10
+	h.TextFgColor = ui.ColorWhite
+	h.BorderLabel = "Comment"
+
+	ui.Render(p, g, h)
+
+	//Handle when someone presses the enter key
+	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
 		if (textboxActive == 0) {
 			//Move on to the next textbox
 
 			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
 			textboxActive = 1
 			g.Text = "|" //Add cursor to the end of g
-		} else if (textboxActive == 1) {
-			//Move back to the first textbox
 
-			g.Text = p.Text[:len(g.Text) - 1] //Remove the cursor from the end of g
-			textboxActive = 0
-			p.Text = "|" //Add cursor to the end of p
+			ui.Render(p, g, h)
+		} else if (textboxActive == 1) {
+			//Move on to the next textbox
+
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 2
+			h.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h)
+		} else if (textboxActive == 2) {
+			//User entry is complete
+			ui.StopLoop()
+		}
+	})
+
+	//Handle data entry into the textbox
+	ui.Handle("/sys/kbd", func(e ui.Event) {
+
+		//Handle backspaces
+		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
+			if ((textboxActive == 0) && (len(masterPassword) > 0)) {
+				//We're removing from textbox 0
+
+				masterPassword = masterPassword[:len(masterPassword) - 1]
+				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
+				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(password) > 0)) {
+				//We're removing from textbox 1
+
+				password = password[:len(password) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 2) && (len(comment) > 0)) {
+				//We're removing from textbox 2
+
+				comment = comment[:len(comment) - 1]
+				h.Text = h.Text[:len(h.Text) - 2] //Remove the cursor and star from the end
+				h.Text = h.Text + "|" //Add the cursor back
+			}
+
+		//Handle writing into the textboxes
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			masterPassword = masterPassword + string(e.Data.(ui.EvtKbd).KeyStr)
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
+			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			password = password + string(e.Data.(ui.EvtKbd).KeyStr)
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = g.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 2) {
+			//We're writing in textbox 2
+
+			comment = comment + string(e.Data.(ui.EvtKbd).KeyStr)
+			comment = strings.Replace(comment, "<space>", " ", -1)
+			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end
+			h.Text = comment + "|" //Add the data and then the cursor back
 		}
 
-		ui.Render(p, g)
+		ui.Render(p, g, h)
+	})
+
+	ui.Handle("/sys/kbd/esc", func(ui.Event) {
+		//If ESC is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-c", func(ui.Event) {
+		//If CTRL-C is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-x", func(ui.Event) {
+		//If CTRL-X is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Loop()
+
+	return masterPassword, password, comment
+}
+
+func rcPrompt() (string, string) {
+	err := ui.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	var password1 = ""
+	var password2 = ""
+	var textboxActive = 0
+
+	//This is textbox 0
+	p := ui.NewPar("|")
+	p.Height = 3
+	p.Width = 50
+	p.X = 5
+	p.TextFgColor = ui.ColorWhite
+	p.BorderLabel = "New wallet password"
+
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "New wallet password (again)"
+
+	ui.Render(p, g)
+
+	//Handle when someone presses the enter key
+	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
+		if (textboxActive == 0) {
+			//Move on to the next textbox
+
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 1
+			g.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g)
+		} else if (textboxActive == 1) {
+			//User entry is complete
+			ui.StopLoop()
+		}
 	})
 
 	//Handle data entry into the textbox
@@ -153,7 +439,7 @@ func promptTwoPasswords(label1 string, label2 string) (string, string) {
 			} else if ((textboxActive == 1) && (len(password2) > 0)) {
 				//We're removing from textbox 1
 
-				password2 = password2[:len(password1) - 1]
+				password2 = password2[:len(password2) - 1]
 				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
 				g.Text = g.Text + "|" //Add the cursor back
 			}
@@ -197,23 +483,6 @@ func promptTwoPasswords(label1 string, label2 string) (string, string) {
 }
 
 func main() {
-	password1, password2 := promptTwoPasswords("New wallet password", "New wallet password (confirm)")
-	fmt.Printf("[test 1] new wallet passwords: %s %s\n", password1, password2)
-
-	password3 := promptOnePassword("Wallet password")
-
-	/*password4 = ""
-	for i := 0; i < len(password3); i++ {
-		if ((len(password3) - i) == 0) {
-			break
-		}
-
-		if ()
-	}*/
-
-	fmt.Printf("[test 2] wallet password: %s\n", password3)
-
-	password1, password2 := promptTwoPasswords("New wallet password", "New wallet password (confirm)")
-	fmt.Printf("[test 1] new wallet passwords: %s %s\n", password1, password2)
-
+	a, b, c := chpwPrompt()
+	fmt.Printf("%s %s\n", a, b, c)
 }
