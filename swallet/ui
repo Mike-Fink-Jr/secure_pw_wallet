@@ -245,7 +245,7 @@ func dsPrompt() (string, string) {
 	return masterPassword, entryName
 }
 
-func addPrompt() (string, string, string) {
+func addPrompt() (string, string, string, string) {
 	err := ui.Init()
 	if err != nil {
 		panic(err)
@@ -255,6 +255,7 @@ func addPrompt() (string, string, string) {
 	var masterPassword = ""
 	var password = ""
 	var comment = ""
+	var entryName = ""
 	var textboxActive = 0
 
 	//This is textbox 0
@@ -283,7 +284,16 @@ func addPrompt() (string, string, string) {
 	h.TextFgColor = ui.ColorWhite
 	h.BorderLabel = "Comment"
 
-	ui.Render(p, g, h)
+	//This is textbox 3
+	j := ui.NewPar("")
+	j.Height = 3
+	j.Width = 70
+	j.X = 5
+	j.Y = 15
+	j.TextFgColor = ui.ColorWhite
+	j.BorderLabel = "Entry name"
+
+	ui.Render(p, g, h, j)
 
 	//Handle when someone presses the enter key
 	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
@@ -294,7 +304,7 @@ func addPrompt() (string, string, string) {
 			textboxActive = 1
 			g.Text = "|" //Add cursor to the end of g
 
-			ui.Render(p, g, h)
+			ui.Render(p, g, h, j)
 		} else if (textboxActive == 1) {
 			//Move on to the next textbox
 
@@ -302,8 +312,16 @@ func addPrompt() (string, string, string) {
 			textboxActive = 2
 			h.Text = "|" //Add cursor to the end of g
 
-			ui.Render(p, g, h)
+			ui.Render(p, g, h, j)
 		} else if (textboxActive == 2) {
+			//Move on to the next textbox
+
+			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 3
+			j.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h, j)
+		} else if (textboxActive == 3) {
 			//User entry is complete
 			ui.StopLoop()
 		}
@@ -332,6 +350,12 @@ func addPrompt() (string, string, string) {
 				comment = comment[:len(comment) - 1]
 				h.Text = h.Text[:len(h.Text) - 2] //Remove the cursor and star from the end
 				h.Text = h.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 3) && (len(entryName) > 0)) {
+				//We're removing from textbox 3
+
+				entryName = entryName[:len(entryName) - 1]
+				j.Text = j.Text[:len(j.Text) - 2] //Remove the cursor and star from the end
+				j.Text = j.Text + "|" //Add the cursor back
 			}
 
 		//Handle writing into the textboxes
@@ -354,9 +378,16 @@ func addPrompt() (string, string, string) {
 			comment = strings.Replace(comment, "<space>", " ", -1)
 			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end
 			h.Text = comment + "|" //Add the data and then the cursor back
+		} else if (textboxActive == 3) {
+			//We're writing in textbox 3
+
+			entryName = entryName + string(e.Data.(ui.EvtKbd).KeyStr)
+			entryName = strings.Replace(entryName, "<space>", " ", -1)
+			j.Text = j.Text[:len(j.Text) - 1] //Remove the cursor from the end
+			j.Text = entryName + "|" //Add the data and then the cursor back
 		}
 
-		ui.Render(p, g, h)
+		ui.Render(p, g, h, j)
 	})
 
 	ui.Handle("/sys/kbd/esc", func(ui.Event) {
@@ -376,7 +407,7 @@ func addPrompt() (string, string, string) {
 
 	ui.Loop()
 
-	return masterPassword, password, comment
+	return masterPassword, password, comment, entryName
 }
 
 func rcPrompt() (string, string) {
@@ -483,6 +514,6 @@ func rcPrompt() (string, string) {
 }
 
 func main() {
-	a, b, c := chpwPrompt()
-	fmt.Printf("%s %s\n", a, b, c)
+	a, b, c, d := addPrompt()
+	fmt.Printf("%s %s %s %s\n", a, b, c, d)
 }
