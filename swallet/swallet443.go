@@ -20,7 +20,8 @@ import (
 	"math/rand"
 	"github.com/pborman/getopt"
 	"bufio"
-	"golang.org/x/crypto/ssh/terminal"
+	//"golang.org/x/crypto/ssh/terminal"
+	ui "github.com/gizak/termui"
 	"strconv"
 	"bytes"
 	"crypto/sha1"
@@ -31,7 +32,7 @@ import (
 	// There will likely be several mode APIs you need
 )
 
-// Type definition  ** YOU WILL NEED TO ADD TO THESE **
+
 
 // A single password
 type walletEntry struct {
@@ -68,12 +69,35 @@ where:
      list - list the entries in the wallet (without passwords)`
 
 var verbose bool = true
+//var terminal bool =true
 var mod_entry int = -1
 
 // You may want to create more global variables
 
 //
 // Functions
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : vprint
+// Description  : This function is used to output data to console quickly if the program is running in 'verbose' mode
+//					it is primarily to cut down on time spent debugging and unit testing, all instances could be removed theoretically
+//
+// Called in 	: every where
+//
+// Inputs       : string s,		
+//				: uses the global verbose variable
+//
+// Outputs      : prints to fmt, but otherwise is void
+//
+ func vprint( s string){ 
+ 	if verbose{
+ 	fmt.Printf("Verbose: %s\n",s)
+	}
+}
+
+
+
 func encrypt(key []byte, plaintext []byte, salt []byte) []byte{
   	
   	block, _ := aes.NewCipher(key)
@@ -81,9 +105,8 @@ func encrypt(key []byte, plaintext []byte, salt []byte) []byte{
   	gcm, _ := cipher.NewGCMWithNonceSize(block, 16)
     
   	encryption := gcm.Seal(nil, salt, plaintext, nil)
-    if verbose {
-        fmt.Print("-Password encrypted\n")
-    }
+	  vprint("-Password encrypted\n")
+    
     return encryption
 }
 
@@ -99,14 +122,16 @@ func decrypt(key []byte, ciphertext []byte, salt []byte) []byte{
   		panic(err.Error())
   	}
   
-    if verbose {
-        fmt.Printf("-Password decrypted\n", decryption)
-    }
+    vprint("-Password decrypted\n")
+    
     return decryption
 }
 
 
-func getPass(leng int) []byte{
+
+
+
+func getPass(leng int, pass string, pass2 string) []byte{
 
 	pw := []byte{}
 
@@ -114,27 +139,26 @@ func getPass(leng int) []byte{
 
 
 	for !pw_match{
-		fmt.Print("Enter new password \n")
 
-		pass, _ := terminal.ReadPassword(0)
 		if (len(pass) <= leng){
-			fmt.Print("Enter new password again \n")
-			pass2, _ := terminal.ReadPassword(0)
-			if (bytes.Equal(pass,pass2)){
+			if (strings.Compare(pass,pass2) ==0){
 				pw_match = true
 				if(verbose){
 					fmt.Print("-passwords match \n")
 				}
-				return pass
+				return []byte(pass)
 			}else{
-				fmt.Print("Passwords do not match, try again \n")
+				fmt.Print("Passwords do not match\n\n exiting program\n")
+				os.Exit(-1)
 			}
 		}else{
-			fmt.Print("Password must be less than " + strconv.Itoa(leng) + " characters \n")
+			fmt.Print("Password must be less than " + strconv.Itoa(leng) + " characters \n\nExiting Program\n")
+			os.Exit(-1)
 		}
 	}
 	return pw
  }
+
 
 
 
@@ -162,21 +186,19 @@ func walletUsage() {
 // Inputs       : filename - the name of the wallet file
 // Outputs      : the wallet if created, nil otherwise
 
-func createWallet(filename string) *wallet {
-
+func createWallet(filename string, pass1 string,pass2 string) *wallet {
 	// Setup the wallet
 	var myWallet wallet 
 	myWallet.filename = filename
 	myWallet.masterPassword = make([]byte, 32, 32) // You need to take it from here
 	myWallet.generationNum = -1
 
-	fmt.Print("Create master password: \n")
-	mp := getPass(32)
- 	
+	//fmt.Print("Create master password: \n")
+	mp := getPass(32, pass1, pass2)
 	copy(myWallet.masterPassword, mp)
-	if (verbose){
-		fmt.Print("-created wallet \n")
-	}
+		vprint("-created wallet \n")
+	
+
 
 	// Return the wall
 	return &myWallet
@@ -190,11 +212,9 @@ func createWallet(filename string) *wallet {
 // Inputs       : filename - the name of the wallet file
 // Outputs      : the wallet if created, nil otherwise
 
-func loadWallet(filename string) *wallet {
-
-	if (verbose){
-		fmt.Print("-Loading wallet from " + filename + "\n")
-	}
+func loadWallet(filename string, master string) *wallet {
+	vprint("-Loading wallet from " + filename)
+	defer vprint("end Load wallet from " + filename )
 
 	// Setup the wallet
 	var myWallet wallet
@@ -209,11 +229,10 @@ func loadWallet(filename string) *wallet {
 	defer f.Close()
 
 	fmt.Print("Enter Password \n")
-	pw, _ := terminal.ReadPassword(0)
+	pw := master
 
 	sc := bufio.NewScanner(f)
     sc.Scan()
-
     hmacLines := sc.Text() //all except last used for HMAC
     var entryLines []string //the middle lines
     lastLine :=""
@@ -236,9 +255,9 @@ func loadWallet(filename string) *wallet {
   	file_hmac, _ := base64.StdEncoding.DecodeString(strings.Split(lastLine, "\n")[0]) //strip the newline
 
   	if hmac.Equal(my_hmac,file_hmac){
-  		if(verbose){
-  			fmt.Print("-valid password \n")
-  		}
+  		
+  		vprint("-valid password")
+  		
   		myWallet.masterPassword = pad
   	}else{
   		fmt.Print("Invalid password, exiting\n")
@@ -265,7 +284,7 @@ func loadWallet(filename string) *wallet {
 
   		myWallet.passwords = append(myWallet.passwords, entry)
   	}
-
+  	fmt.Printf("%s %s ", string(myWallet.passwords[0].entry), string(myWallet.passwords[0].comment))
 	// Return the wall
 	return &myWallet
 }
@@ -280,9 +299,8 @@ func loadWallet(filename string) *wallet {
 
 func (my_Wallet wallet) saveWallet() bool {
 
-	if (verbose){
-		fmt.Print("-saving wallet \n")
-	}
+		vprint("-saving wallet")
+	
 
 	f, err := os.Create(my_Wallet.filename)
 	if (err != nil){
@@ -330,32 +348,66 @@ func (my_Wallet wallet) saveWallet() bool {
 //                command - the command to execute
 // Outputs      : true if successful test, false if failure
 
-func (my_wallet *wallet) processWalletCommand(command string) bool {
+func processWalletCommand(command string,filename string)  {
 
 	// Process the command 
 	switch command {
-	case "add":
 
-		fmt.Print("Name your entry\n")
-		readIn := bufio.NewReader(os.Stdin)
-
-		e_name, _ := readIn.ReadString('\n')
-		for(len(e_name) > 32) {
-			fmt.Print("Entry name must be shorter than 32 characters, please enter a new one\n")
-			e_name, _ = readIn.ReadString('\n')
+	case "create":
+		 pass, pass2 := rcPrompt()
+		my_wallet := createWallet(filename,pass,pass2)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong creating the wallet\n\n exiting now\n")
+			os.Exit(-1)
 		}
-		full_e_name := make([]byte, 32, 32)
-		copy(full_e_name, e_name)
 
-		pass := getPass(16)
+		if (my_wallet.saveWallet()){
+			vprint("operation success!")
+		}
+	
 
-		fmt.Print("Feel free to add a comment (max 128 characters)\n")
-		com, _ := readIn.ReadString('\n')
-		for len(com) > 128{
-			fmt.Print("Too long! Only 128 characters allowed. Try again\n")
-			com, _ = readIn.ReadString('\n')
+	case "add":
+	var full_e_name []byte
+		master,pass ,com,e_name := addPrompt()
+
+		my_wallet := loadWallet(filename,master)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong loading the wallet\n\nexiting now\n")
+			os.Exit(-1)
+		}
+
+		if(len(e_name) > 32) {
+			fmt.Print("Entry name must be shorter than 32 characters\n\nexiting now\n")
+			os.Exit(-1)
+		}else{
+			for _, e := range my_wallet.passwords{
+				if strings.Compare(string(e.entry),e_name)==0 {
+				fmt.Print("Entry name taken already\n\nexiting now\n")
+				os.Exit(-1)
+				}
+			}
+			
+			full_e_name = make([]byte, 32, 32)
+			copy(full_e_name, e_name)
+		
+		var full_pass []byte
+
+		if len(pass) > 16{
+			fmt.Print("Too long! Only 16 characters allowed\n exiting now\n")
+			os.Exit(-1)
+		} else{
+			full_pass = make([]byte, 16,16)
+			copy(full_pass,pass)
+
+		}
+
+		
+		if len(com) > 128{
+			fmt.Print("Too long! Only 128 characters allowed. cutting off the execess\n")
+			com=com[:127]
 		} 
-		full_com := make([]byte, 32, 32)
+
+		full_com := make([]byte, 128, 128)
 		copy(full_com, com)
 
 		salt := make([]byte, 16, 16)
@@ -363,120 +415,164 @@ func (my_wallet *wallet) processWalletCommand(command string) bool {
 
 		var new_entry walletEntry
 		new_entry.entry = full_e_name
-		new_entry.password = pass
+		new_entry.password = full_pass
 		new_entry.salt = salt
 		new_entry.comment = full_com
 
 		my_wallet.passwords = append(my_wallet.passwords, new_entry)
 
 		my_wallet.saveWallet()
+	}
 
 	case "del":
+		master,name := dsPrompt()
 
-		fmt.Print("Enter number of entry to delete \n")
-		readIn := bufio.NewReader(os.Stdin)
-		s, _ := readIn.ReadString('\n')
-		s = strings.TrimRight(s, "\n")
-		d, _ := strconv.Atoi(s) 
-
-
-		if len(my_wallet.passwords) - 1 < d{
-			fmt.Print("Delete out of bounds, aborting\n")
-			break
+		my_wallet := loadWallet(filename,master)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong loading the wallet\n\nexiting now\n")
+			os.Exit(-1)
 		}
+
+	
+		d :=-1
+		for i, e := range my_wallet.passwords{
+			if(strings.Compare(string(e.entry),name)==0){
+				
+				d=i
+			}
+		}
+		if d==-1{
+			fmt.Print("no entry by the name"+name+ "\n\naborting\n")
+			os.Exit(-1)
+		}
+	
 		
-		fmt.Print("Are you sure you want to delete this entry? It will not be recoverable. (y/n)\n")
+/*		fmt.Print("Are you sure you want to delete this entry? It will not be recoverable. (y/n)\n")
 
 		readIn2 := bufio.NewReader(os.Stdin)
 		ans, _ := readIn2.ReadString('\n')
 		if strings.Compare(strings.ToLower(ans), "y\n") ==  0 || strings.ToLower(ans) == "yes\n"{
-			my_wallet.passwords = append(my_wallet.passwords[:d], my_wallet.passwords[d+1:]...)
-			if (verbose){
-				fmt.Print("-deleted entry\n")
-			}
-		}else{
-			fmt.Print("Deletion aborted \n")
-		}
+*/			my_wallet.passwords = append(my_wallet.passwords[:d], my_wallet.passwords[d+1:]...)
+
+				vprint("-deleted entry")
+			
+		//}else{
+			//fmt.Print("Deletion aborted \n")
+		//}
 			
 		
 		my_wallet.saveWallet()
 
 	case "show":
-		fmt.Print("Enter number of entry to show\n")
+	
+		name,master := dsPrompt()
 
-		readIn := bufio.NewReader(os.Stdin)
-		s, _ := readIn.ReadString('\n')
-		s = strings.TrimRight(s, "\n")
-		id, _ := strconv.Atoi(s)
-
-		if id >= len(my_wallet.passwords){
-			fmt.Print("Show out of boands, aborting\n")
-			break
+		my_wallet := loadWallet(filename,master)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong loading the wallet\n\nexiting now\n")
+			os.Exit(-1)
 		}
 
+		
+		//var temp *walletEntry
+		str:=""
+		for _, e := range my_wallet.passwords{
+			if(strings.Compare(string(e.entry),name)==0){
+				fmt.Print("here")
+				str= string(e.password)
+			}
+		}
+		if strings.Compare(str,"")==0{
+			fmt.Print("no entry by the name"+name+ "\n\naborting\n")
+			os.Exit(-1)
+		}
+		//entry:=&temp
+
 		fmt.Print("Password: ")
-		fmt.Print(string(my_wallet.passwords[id].password))
+		fmt.Print(string(str))
 		fmt.Print("\n")
 
 
 		
 		
 	case "chpw":
-		fmt.Print("Enter number of entry to change\n")
 
-		readIn := bufio.NewReader(os.Stdin)
-		s, _ := readIn.ReadString('\n')
-		s = strings.TrimRight(s, "\n")
-		c, _ := strconv.Atoi(s)
-
-		if c >= len(my_wallet.passwords){
-			fmt.Print("Change out of boands, aborting\n")
-			break
+		master,new_pass, name :=chpwPrompt()
+		
+		my_wallet := loadWallet(filename,master)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong loading the wallet\n\nexiting now\n")
+			os.Exit(-1)
 		}
 
-		new_pass := getPass(16)
+
+		//var temp *walletEntry
+		c:=-1
+		for i, e := range my_wallet.passwords{
+			if(strings.Compare(string(e.entry),name)==0){
+				c=i
+			}
+		}
+		if c==-1{
+			fmt.Print("no entry by the name "+name+ "\n\naborting\n")
+			os.Exit(-1)
+		}
+		//entry:=&temp
+
+
+		//new_pass = getPass(16, new_pass, new_pass2)
 
 		copy(my_wallet.passwords[c].password, new_pass)
 
-		if (verbose){
-			fmt.Print("-Password changed\n")
-		}
-
-
+		
+		vprint("-Password changed\n")
+		
 
 		my_wallet.saveWallet()
 
 
-
-
-		
 	case "reset":
-		fmt.Print("Enter new master password:\n")
-		my_wallet.masterPassword = getPass(32)
+		master,pass1:= rcPrompt()
+		pass2:=pass1
+
+		my_wallet := loadWallet(filename,master)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong loading the wallet\n\nexiting now\n")
+			os.Exit(-1)
+		}
+
+		my_wallet.masterPassword = getPass(32, pass1,pass2)
 		my_wallet.saveWallet()
 		
 	case "list":
+		master,_ := dsPrompt()
+
+
+		my_wallet := loadWallet(filename,master)
+		if(my_wallet==nil){
+			fmt.Print("something went wrong loading the wallet\n\nexiting now\n")
+			os.Exit(-1)
+		}
+
 		fmt.Print("Current entries: \n")
 		for _, e := range my_wallet.passwords{
-			name := ""
 			i := 0
 			for i < len(e.entry){
 				fmt.Print(string(e.entry[i]))
 				i ++
 			}
-			fmt.Print(name)
 			fmt.Print("\n")
 		}
 		
 	default:
 		// Handle error, return failure
 		fmt.Fprintf(os.Stderr, "Bad/unknown command for wallet [%s], aborting.\n", command)
-		return false
+		os.Exit(-1)
 	}
 
-	// Return sucessfull
-	return true
+	
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -495,6 +591,7 @@ func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	helpflag := getopt.Bool('h', "", "help (this menu)")
 	verboseflag := getopt.Bool('v', "", "enable verbose output")
+//	terminalflag := getopt.Bool('t', "", "run in terminal mode")
 
 	// Now parse the command line arguments
 	err := getopt.Getopt(nil)
@@ -508,7 +605,10 @@ func main() {
 	// Process the flags
 	fmt.Printf("help flag [%t]\n", *helpflag)
 	fmt.Printf("verbose flag [%t]\n", *verboseflag)
+//	fmt.Printf("terminal flag [%t]\n", *terminalflag)
 	verbose = *verboseflag
+//	terminal= *terminalflag
+	
 	if *helpflag == true {
 		getopt.Usage()
 		os.Exit(-1)
@@ -520,38 +620,542 @@ func main() {
 		getopt.Usage()
 		os.Exit(-1)
 	}
+
 	fmt.Printf("wallet file [%t]\n", getopt.Arg(0))
 	filename := getopt.Arg(0)
 	fmt.Printf("command [%t]\n", getopt.Arg(1))
 	command := strings.ToLower(getopt.Arg(1))
-
-	/*if getopt.NArgs() > 2{
+	if getopt.NArgs() > 2{
 		mod_entry, err = strconv.Atoi(getopt.Arg(2))
 		if err != nil{
 			fmt.Print("Improper arguments, to delete or change password, pass integer of entry to be modified as the third argument. Aborting \n")
 		}
 	}
-	*/
+	
 
-	// Now check if we are creating a wallet
-	if command == "create" {
+	processWalletCommand(command,filename)
 
-		// Create and save the wallet as needed
-		meatWallet := createWallet(filename)
-		if meatWallet != nil {
-			meatWallet.saveWallet()
-		}
 
-	} else {
 
-		// Load the wallet, then process the command
-		my_wallet := loadWallet(filename)
-		if my_wallet != nil{
-			my_wallet.processWalletCommand(command)
-		}
-
-	}
-
+	
 	// Return (no return code)
 	return
 }
+
+
+
+
+
+//AMMARs ui code subject to change
+
+
+
+
+func chpwPrompt() (string, string, string) {
+	err := ui.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	var masterPassword = ""
+	var password = ""
+	var entryName = ""
+	var textboxActive = 0
+
+	//This is textbox 0
+	p := ui.NewPar("|")
+	p.Height = 3
+	p.Width = 50
+	p.X = 5
+	p.TextFgColor = ui.ColorWhite
+	p.BorderLabel = "Wallet password"
+
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "New Password"
+
+	//This is textbox 2
+	h := ui.NewPar("")
+	h.Height = 3
+	h.Width = 70
+	h.X = 5
+	h.Y = 10
+	h.TextFgColor = ui.ColorWhite
+	h.BorderLabel = "Entry name"
+
+	ui.Render(p, g, h)
+
+	//Handle when someone presses the enter key
+	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
+		if (textboxActive == 0) {
+			//Move on to the next textbox
+
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 1
+			g.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h)
+		} else if (textboxActive == 1) {
+			//Move on to the next textbox
+
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 2
+			h.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h)
+		} else if (textboxActive == 2) {
+			//User entry is complete
+			ui.StopLoop()
+		}
+	})
+
+	//Handle data entry into the textbox
+	ui.Handle("/sys/kbd", func(e ui.Event) {
+
+		//Handle backspaces
+		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
+			if ((textboxActive == 0) && (len(masterPassword) > 0)) {
+				//We're removing from textbox 0
+
+				masterPassword = masterPassword[:len(masterPassword) - 1]
+				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
+				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(password) > 0)) {
+				//We're removing from textbox 1
+
+				password = password[:len(password) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 2) && (len(entryName) > 0)) {
+				//We're removing from textbox 2
+
+				entryName = entryName[:len(entryName) - 1]
+				h.Text = h.Text[:len(h.Text) - 2] //Remove the cursor and star from the end
+				h.Text = h.Text + "|" //Add the cursor back
+			}
+
+		//Handle writing into the textboxes
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			masterPassword = masterPassword + string(e.Data.(ui.EvtKbd).KeyStr)
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
+			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			password = password + string(e.Data.(ui.EvtKbd).KeyStr)
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = g.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 2) {
+			//We're writing in textbox 2
+
+			entryName = entryName + string(e.Data.(ui.EvtKbd).KeyStr)
+			entryName = strings.Replace(entryName, "<space>", " ", -1)
+			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end
+			h.Text = entryName + "|" //Add the data and then the cursor back
+		}
+
+		ui.Render(p, g, h)
+	})
+
+	ui.Handle("/sys/kbd/esc", func(ui.Event) {
+		//If ESC is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-c", func(ui.Event) {
+		//If CTRL-C is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-x", func(ui.Event) {
+		//If CTRL-X is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Loop()
+
+	return masterPassword, password, entryName
+}
+
+func dsPrompt() (string, string) {
+	err := ui.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	var masterPassword = ""
+	var entryName = ""
+	var textboxActive = 0
+
+	//This is textbox 0
+	p := ui.NewPar("|")
+	p.Height = 3
+	p.Width = 50
+	p.X = 5
+	p.TextFgColor = ui.ColorWhite
+	p.BorderLabel = "Wallet password"
+
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "Entry name"
+
+	ui.Render(p, g)
+
+	//Handle when someone presses the enter key
+	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
+		if (textboxActive == 0) {
+			//Move on to the next textbox
+
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 1
+			g.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g)
+		} else if (textboxActive == 1) {
+			//User entry is complete
+			ui.StopLoop()
+		}
+	})
+
+	//Handle data entry into the textbox
+	ui.Handle("/sys/kbd", func(e ui.Event) {
+
+		//Handle backspaces
+		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
+			if ((textboxActive == 0) && (len(masterPassword) > 0)) {
+				//We're removing from textbox 0
+
+				masterPassword = masterPassword[:len(masterPassword) - 1]
+				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
+				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(entryName) > 0)) {
+				//We're removing from textbox 1
+
+				entryName = entryName[:len(entryName) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			}
+
+		//Handle writing into the textboxes
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			masterPassword = masterPassword + string(e.Data.(ui.EvtKbd).KeyStr)
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
+			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			entryName = entryName + string(e.Data.(ui.EvtKbd).KeyStr)
+			entryName = strings.Replace(entryName, "<space>", " ", -1)
+
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = entryName + "|" //Add star and then the cursor back
+		}
+
+		ui.Render(p, g)
+	})
+
+	ui.Handle("/sys/kbd/esc", func(ui.Event) {
+		//If ESC is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-c", func(ui.Event) {
+		//If CTRL-C is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-x", func(ui.Event) {
+		//If CTRL-X is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Loop()
+
+	return masterPassword, entryName
+}
+
+func addPrompt() (string, string, string, string) {
+	err := ui.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	var masterPassword = ""
+	var password = ""
+	var comment = ""
+	var entryName = ""
+	var textboxActive = 0
+
+	//This is textbox 0
+	p := ui.NewPar("|")
+	p.Height = 3
+	p.Width = 50
+	p.X = 5
+	p.TextFgColor = ui.ColorWhite
+	p.BorderLabel = "Wallet password"
+
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "Password"
+
+	//This is textbox 2
+	h := ui.NewPar("")
+	h.Height = 3
+	h.Width = 70
+	h.X = 5
+	h.Y = 10
+	h.TextFgColor = ui.ColorWhite
+	h.BorderLabel = "Comment"
+
+	//This is textbox 3
+	j := ui.NewPar("")
+	j.Height = 3
+	j.Width = 70
+	j.X = 5
+	j.Y = 15
+	j.TextFgColor = ui.ColorWhite
+	j.BorderLabel = "Entry name"
+
+	ui.Render(p, g, h, j)
+
+	//Handle when someone presses the enter key
+	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
+		if (textboxActive == 0) {
+			//Move on to the next textbox
+
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 1
+			g.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h, j)
+		} else if (textboxActive == 1) {
+			//Move on to the next textbox
+
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 2
+			h.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h, j)
+		} else if (textboxActive == 2) {
+			//Move on to the next textbox
+
+			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 3
+			j.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g, h, j)
+		} else if (textboxActive == 3) {
+			//User entry is complete
+			ui.StopLoop()
+		}
+	})
+
+	//Handle data entry into the textbox
+	ui.Handle("/sys/kbd", func(e ui.Event) {
+
+		//Handle backspaces
+		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
+			if ((textboxActive == 0) && (len(masterPassword) > 0)) {
+				//We're removing from textbox 0
+
+				masterPassword = masterPassword[:len(masterPassword) - 1]
+				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
+				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(password) > 0)) {
+				//We're removing from textbox 1
+
+				password = password[:len(password) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 2) && (len(comment) > 0)) {
+				//We're removing from textbox 2
+
+				comment = comment[:len(comment) - 1]
+				h.Text = h.Text[:len(h.Text) - 2] //Remove the cursor and star from the end
+				h.Text = h.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 3) && (len(entryName) > 0)) {
+				//We're removing from textbox 3
+
+				entryName = entryName[:len(entryName) - 1]
+				j.Text = j.Text[:len(j.Text) - 2] //Remove the cursor and star from the end
+				j.Text = j.Text + "|" //Add the cursor back
+			}
+
+		//Handle writing into the textboxes
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			masterPassword = masterPassword + string(e.Data.(ui.EvtKbd).KeyStr)
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
+			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			password = password + string(e.Data.(ui.EvtKbd).KeyStr)
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = g.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 2) {
+			//We're writing in textbox 2
+
+			comment = comment + string(e.Data.(ui.EvtKbd).KeyStr)
+			comment = strings.Replace(comment, "<space>", " ", -1)
+			h.Text = h.Text[:len(h.Text) - 1] //Remove the cursor from the end
+			h.Text = comment + "|" //Add the data and then the cursor back
+		} else if (textboxActive == 3) {
+			//We're writing in textbox 3
+
+			entryName = entryName + string(e.Data.(ui.EvtKbd).KeyStr)
+			entryName = strings.Replace(entryName, "<space>", " ", -1)
+			j.Text = j.Text[:len(j.Text) - 1] //Remove the cursor from the end
+			j.Text = entryName + "|" //Add the data and then the cursor back
+		}
+
+		ui.Render(p, g, h, j)
+	})
+
+	ui.Handle("/sys/kbd/esc", func(ui.Event) {
+		//If ESC is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-c", func(ui.Event) {
+		//If CTRL-C is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-x", func(ui.Event) {
+		//If CTRL-X is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Loop()
+
+	return masterPassword, password, comment, entryName
+}
+
+func rcPrompt() (string, string) {
+	err := ui.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	var password1 = ""
+	var password2 = ""
+	var textboxActive = 0
+
+	//This is textbox 0
+	p := ui.NewPar("|")
+	p.Height = 3
+	p.Width = 50
+	p.X = 5
+	p.TextFgColor = ui.ColorWhite
+	p.BorderLabel = "New wallet password"
+
+	//This is textbox 1
+	g := ui.NewPar("")
+	g.Height = 3
+	g.Width = 50
+	g.X = 5
+	g.Y = 4
+	g.TextFgColor = ui.ColorWhite
+	g.BorderLabel = "New wallet password (again)"
+
+	ui.Render(p, g)
+
+	//Handle when someone presses the enter key
+	ui.Handle("/sys/kbd/<enter>", func(e ui.Event) {
+		if (textboxActive == 0) {
+			//Move on to the next textbox
+
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end of p
+			textboxActive = 1
+			g.Text = "|" //Add cursor to the end of g
+
+			ui.Render(p, g)
+		} else if (textboxActive == 1) {
+			//User entry is complete
+			ui.StopLoop()
+		}
+	})
+
+	//Handle data entry into the textbox
+	ui.Handle("/sys/kbd", func(e ui.Event) {
+
+		//Handle backspaces
+		if (string(e.Data.(ui.EvtKbd).KeyStr) == "C-8") {
+			if ((textboxActive == 0) && (len(password1) > 0)) {
+				//We're removing from textbox 0
+
+				password1 = password1[:len(password1) - 1]
+				p.Text = p.Text[:len(p.Text) - 2] //Remove the cursor and star from the end
+				p.Text = p.Text + "|" //Add the cursor back
+			} else if ((textboxActive == 1) && (len(password2) > 0)) {
+				//We're removing from textbox 1
+
+				password2 = password2[:len(password2) - 1]
+				g.Text = g.Text[:len(g.Text) - 2] //Remove the cursor and star from the end
+				g.Text = g.Text + "|" //Add the cursor back
+			}
+
+		//Handle writing into the textboxes
+		} else if (textboxActive == 0) {
+			//We're writing in textbox 0
+
+			password1 = password1 + string(e.Data.(ui.EvtKbd).KeyStr)
+			p.Text = p.Text[:len(p.Text) - 1] //Remove the cursor from the end
+			p.Text = p.Text + "*|" //Add star and then the cursor back
+		} else if (textboxActive == 1) {
+			//We're writing in textbox 1
+
+			password2 = password2 + string(e.Data.(ui.EvtKbd).KeyStr)
+			g.Text = g.Text[:len(g.Text) - 1] //Remove the cursor from the end
+			g.Text = g.Text + "*|" //Add star and then the cursor back
+		}
+
+		ui.Render(p, g)
+	})
+
+	ui.Handle("/sys/kbd/esc", func(ui.Event) {
+		//If ESC is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-c", func(ui.Event) {
+		//If CTRL-C is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Handle("/sys/kbd/C-x", func(ui.Event) {
+		//If CTRL-X is used, stop the loop and exit
+		ui.StopLoop()
+	})
+
+	ui.Loop()
+
+	return password1, password2
+}
+
+
